@@ -1,0 +1,12 @@
+name: xiangqi-online
+
+services:
+  xiangqi:
+    build: .
+    container_name: xiangqi
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "3000:3000"

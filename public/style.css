@@ -1,0 +1,300 @@
+﻿:root {
+  color-scheme: light;
+  --paper: #efbd67;
+  --paper-light: #fff2d2;
+  --line: #563016;
+  --red: #c8211f;
+  --black: #1f1c18;
+  --panel: #fff8ec;
+  --text: #25170f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 20% 0%, rgba(255, 247, 232, 0.9), transparent 36%),
+    linear-gradient(135deg, #f7efe2, #efe0cb);
+  font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif;
+}
+
+button {
+  border: 1px solid #7a4a23;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #2b1609;
+  background: #fff3df;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: #ffe4bb;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.app {
+  width: min(100%, 1180px);
+  margin: 0 auto;
+  padding: 18px 16px 28px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  margin: 0 0 6px;
+  font-size: clamp(24px, 4vw, 36px);
+  letter-spacing: 0;
+}
+
+p,
+h2 {
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+#status {
+  min-width: 120px;
+  font-size: 14px;
+}
+
+.game {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 680px) 112px;
+  justify-content: center;
+  align-items: start;
+  gap: 14px;
+}
+
+.board-wrap {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  overflow: visible;
+  padding: 0;
+}
+
+.board {
+  --edge-pad: clamp(42px, 7vw, 58px);
+  position: relative;
+  width: min(100%, 680px, 70vh);
+  aspect-ratio: 8 / 9;
+  border: 12px solid #744019;
+  background:
+    radial-gradient(circle at 28% 18%, rgba(255, 246, 218, 0.42), transparent 30%),
+    radial-gradient(circle at 80% 82%, rgba(117, 63, 24, 0.2), transparent 34%),
+    repeating-linear-gradient(8deg, rgba(114, 67, 28, 0.075) 0 3px, transparent 3px 13px),
+    repeating-linear-gradient(92deg, rgba(255, 238, 185, 0.08) 0 2px, transparent 2px 18px),
+    linear-gradient(90deg, rgba(126, 73, 29, 0.16), transparent 18%, transparent 82%, rgba(126, 73, 29, 0.16)),
+    var(--paper);
+  box-shadow:
+    inset 0 0 0 3px rgba(255, 232, 178, 0.28),
+    inset 0 0 34px rgba(91, 47, 16, 0.24),
+    0 18px 45px rgba(77, 46, 14, 0.24);
+  touch-action: none;
+  user-select: none;
+}
+
+.board::before {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border: 2px solid rgba(82, 43, 18, 0.48);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 240, 196, 0.36),
+    0 0 0 1px rgba(98, 51, 18, 0.14);
+  pointer-events: none;
+}
+
+.board-grid {
+  position: absolute;
+  inset: var(--edge-pad);
+  z-index: 0;
+  filter: drop-shadow(0 1px 0 rgba(255, 226, 166, 0.32));
+}
+
+.board-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.board-svg line {
+  vector-effect: non-scaling-stroke;
+  stroke: var(--line);
+  stroke-width: 2;
+  stroke-linecap: square;
+}
+
+.board-svg .palace-line {
+  stroke-width: 2.2;
+}
+
+.river {
+  position: absolute;
+  left: calc(var(--edge-pad) + 8px);
+  right: calc(var(--edge-pad) + 8px);
+  top: 50%;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 11%;
+  color: rgba(92, 49, 20, 0.56);
+  font-size: clamp(20px, 5vw, 40px);
+  font-family: "KaiTi", "STKaiti", serif;
+  letter-spacing: 0;
+  text-shadow: 0 1px 0 rgba(255, 230, 174, 0.52);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.board[data-view="black"] .river {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.piece,
+.captured-piece {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid currentColor;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, 0.94), transparent 18%),
+    radial-gradient(circle at 50% 46%, #fffaf0 0 46%, transparent 47%),
+    linear-gradient(145deg, #fff6df, #ead29e);
+  font-family: "KaiTi", "STKaiti", "SimSun", serif;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.piece {
+  position: absolute;
+  z-index: 2;
+  width: clamp(34px, 6.7vw, 54px);
+  height: clamp(34px, 6.7vw, 54px);
+  padding: 0 0 2px;
+  box-shadow:
+    inset 0 -4px 8px rgba(92, 55, 17, 0.14),
+    inset 0 2px 3px rgba(255, 255, 255, 0.72),
+    0 6px 12px rgba(45, 24, 8, 0.3);
+  font-size: clamp(21px, 4.4vw, 33px);
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  touch-action: none;
+}
+
+.piece.red,
+.captured-piece.red {
+  color: var(--red);
+}
+
+.piece.black,
+.captured-piece.black {
+  color: var(--black);
+}
+
+.piece.dragging {
+  z-index: 10;
+  cursor: grabbing;
+  box-shadow:
+    inset 0 -4px 8px rgba(92, 55, 17, 0.12),
+    inset 0 2px 3px rgba(255, 255, 255, 0.72),
+    0 14px 24px rgba(51, 27, 8, 0.34);
+}
+
+.captured-panel {
+  min-height: 160px;
+  padding: 12px;
+  border: 1px solid rgba(122, 74, 35, 0.28);
+  border-radius: 8px;
+  background: rgba(255, 248, 236, 0.86);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.captured-panel h2 {
+  margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.captured-list {
+  display: flex;
+  align-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 42px;
+}
+
+.captured-piece {
+  width: 34px;
+  height: 34px;
+  padding-bottom: 1px;
+  border-width: 2px;
+  font-size: 21px;
+  box-shadow:
+    inset 0 -2px 5px rgba(92, 55, 17, 0.12),
+    0 2px 5px rgba(45, 24, 8, 0.16);
+}
+
+@media (max-width: 1100px) {
+  .game {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .board-wrap {
+    grid-row: 1;
+  }
+
+  .captured-panel {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .app {
+    padding: 12px 10px 24px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .actions {
+    justify-content: flex-start;
+  }
+
+  .board {
+    --edge-pad: clamp(34px, 9vw, 44px);
+    width: min(100%, 92vw, 68vh);
+    border-width: 8px;
+  }
+}

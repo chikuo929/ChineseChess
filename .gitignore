@@ -1,0 +1,7 @@
+node_modules/
+*.log
+npm-debug.log
+pnpm-debug.log
+.env
+.DS_Store
+xiangqi-online-docker.tar

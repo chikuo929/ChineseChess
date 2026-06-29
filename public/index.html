@@ -1,0 +1,47 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>&#26497;&#31616;&#22312;&#32447;&#35937;&#26827;</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div>
+          <h1>&#26497;&#31616;&#22312;&#32447;&#35937;&#26827;</h1>
+          <p id="roomLabel">&#25151;&#38388;</p>
+        </div>
+        <div class="actions">
+          <span id="status">&#36830;&#25509;&#20013;...</span>
+          <button id="viewButton" type="button">&#20999;&#25442;&#35270;&#35282;</button>
+          <button id="undoButton" type="button" disabled>&#36864;&#19968;&#27493;</button>
+          <button id="copyLinkButton" type="button">&#22797;&#21046;&#25151;&#38388;&#38142;&#25509;</button>
+          <button id="resetButton" type="button">&#37325;&#32622;&#26827;&#30424;</button>
+        </div>
+      </header>
+
+      <section class="game">
+        <aside class="captured-panel">
+          <h2>&#32418;&#26041;&#21507;&#25481;</h2>
+          <div id="redCaptured" class="captured-list"></div>
+        </aside>
+
+        <section class="board-wrap">
+          <div id="board" class="board" aria-label="&#20013;&#22269;&#35937;&#26827;&#26827;&#30424;">
+            <div class="river">&#26970;&#27827;&nbsp;&nbsp;&nbsp;&nbsp;&#27721;&#30028;</div>
+          </div>
+        </section>
+
+        <aside class="captured-panel">
+          <h2>&#40657;&#26041;&#21507;&#25481;</h2>
+          <div id="blackCaptured" class="captured-list"></div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

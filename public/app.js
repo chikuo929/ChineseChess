@@ -16,6 +16,10 @@ let activePiece = null;
 let activePointerId = null;
 let viewSide = localStorage.getItem("xiangqi-view-side") || "red";
 let gridLayer = null;
+let lastRoomSnapshot = null;
+let suppressNextMoveSound = false;
+let audioContext = null;
+let fallbackMoveAudio = null;
 
 roomLabel.textContent = `\u623f\u95f4\uff1a${roomId}`;
 
@@ -37,6 +41,17 @@ socket.on("player-count", (count) => {
 });
 
 socket.on("room-state", ({ pieces: serverPieces, canUndo }) => {
+  const nextSnapshot = snapshotPieces(serverPieces);
+
+  if (lastRoomSnapshot && nextSnapshot !== lastRoomSnapshot) {
+    if (suppressNextMoveSound) {
+      suppressNextMoveSound = false;
+    } else {
+      playMoveSound();
+    }
+  }
+
+  lastRoomSnapshot = nextSnapshot;
   renderPieces(serverPieces);
   undoButton.disabled = !canUndo;
 });
@@ -71,6 +86,7 @@ copyLinkButton.addEventListener("click", async () => {
 });
 
 window.addEventListener("resize", placeAllPieces);
+window.addEventListener("pointerdown", unlockAudio, { once: true });
 
 function getRoomId() {
   const pathMatch = window.location.pathname.match(/^\/room\/([^/]+)$/);
@@ -89,7 +105,8 @@ function drawBoard() {
   svg.setAttribute("aria-hidden", "true");
 
   for (let x = 0; x < 9; x += 1) {
-    svg.appendChild(createLine(x, 0, x, 9, "grid-line"));
+    svg.appendChild(createLine(x, 0, x, 4, "grid-line"));
+    svg.appendChild(createLine(x, 5, x, 9, "grid-line"));
   }
 
   for (let y = 0; y < 10; y += 1) {
@@ -119,6 +136,104 @@ function createLine(x1, y1, x2, y2, className) {
   return line;
 }
 
+function snapshotPieces(serverPieces) {
+  return serverPieces
+    .map((piece) => `${piece.id}:${piece.x}:${piece.y}:${piece.captured}:${piece.capturedBy || ""}`)
+    .sort()
+    .join("|");
+}
+
+function unlockAudio() {
+  if (audioContext || fallbackMoveAudio) return;
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+
+  if (AudioContext) {
+    audioContext = new AudioContext();
+    return;
+  }
+
+  fallbackMoveAudio = new Audio(createMoveSoundDataUrl());
+  fallbackMoveAudio.preload = "auto";
+}
+
+function createMoveSoundDataUrl() {
+  const sampleRate = 8000;
+  const duration = 0.09;
+  const samples = Math.floor(sampleRate * duration);
+  const dataSize = samples * 2;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  writeAscii(view, 0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  writeAscii(view, 8, "WAVE");
+  writeAscii(view, 12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeAscii(view, 36, "data");
+  view.setUint32(40, dataSize, true);
+
+  for (let i = 0; i < samples; i += 1) {
+    const t = i / sampleRate;
+    const envelope = Math.exp(-45 * t);
+    const tone = Math.sin(2 * Math.PI * 360 * t) + 0.35 * Math.sin(2 * Math.PI * 150 * t);
+    view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, tone * envelope)) * 28000, true);
+  }
+
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+
+  return `data:audio/wav;base64,${btoa(binary)}`;
+}
+
+function writeAscii(view, offset, text) {
+  for (let i = 0; i < text.length; i += 1) {
+    view.setUint8(offset + i, text.charCodeAt(i));
+  }
+}
+function playMoveSound() {
+  unlockAudio();
+
+  if (!audioContext) {
+    if (!fallbackMoveAudio) return;
+    const audio = fallbackMoveAudio.cloneNode();
+    audio.volume = 0.5;
+    audio.play().catch(() => {});
+    return;
+  }
+
+  const now = audioContext.currentTime;
+  const osc = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  const filter = audioContext.createBiquadFilter();
+
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(420, now);
+  osc.frequency.exponentialRampToValueAtTime(150, now + 0.055);
+
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(900, now);
+  filter.frequency.exponentialRampToValueAtTime(280, now + 0.08);
+
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.18, now + 0.006);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioContext.destination);
+
+  osc.start(now);
+  osc.stop(now + 0.1);
+}
 function renderPieces(serverPieces) {
   const seen = new Set();
   redCaptured.replaceChildren();
@@ -183,6 +298,7 @@ function renderCapturedPiece(piece) {
 }
 
 function startDrag(event) {
+  unlockAudio();
   activePiece = event.currentTarget;
   activePointerId = event.pointerId;
   activePiece.classList.add("dragging");
@@ -215,9 +331,16 @@ function finishDrag(event) {
   const pieceId = activePiece.dataset.id;
   const item = pieces.get(pieceId);
 
+  const didMove = item.x !== grid.x || item.y !== grid.y;
   item.x = grid.x;
   item.y = grid.y;
   placePiece(activePiece, grid.x, grid.y);
+
+  if (didMove) {
+    suppressNextMoveSound = true;
+    playMoveSound();
+  }
+
   socket.emit("move-piece", { roomId, pieceId, x: grid.x, y: grid.y });
 
   activePiece = null;
@@ -285,5 +408,7 @@ function syncViewButton() {
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
+
+
 
 

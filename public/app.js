@@ -14,6 +14,8 @@ const roomId = getRoomId();
 const pieces = new Map();
 let activePiece = null;
 let activePointerId = null;
+let activeDragWasCaptured = false;
+let activePointerPosition = null;
 let viewSide = localStorage.getItem("xiangqi-view-side") || "red";
 let gridLayer = null;
 let lastRoomSnapshot = null;
@@ -105,8 +107,12 @@ function drawBoard() {
   svg.setAttribute("aria-hidden", "true");
 
   for (let x = 0; x < 9; x += 1) {
-    svg.appendChild(createLine(x, 0, x, 4, "grid-line"));
-    svg.appendChild(createLine(x, 5, x, 9, "grid-line"));
+    if (x === 0 || x === 8) {
+      svg.appendChild(createLine(x, 0, x, 9, "grid-line"));
+    } else {
+      svg.appendChild(createLine(x, 0, x, 4, "grid-line"));
+      svg.appendChild(createLine(x, 5, x, 9, "grid-line"));
+    }
   }
 
   for (let y = 0; y < 10; y += 1) {
@@ -272,7 +278,7 @@ function updatePiece(piece) {
 
   if (piece.captured) {
     item.el.remove();
-    renderCapturedPiece(piece);
+    renderCapturedPiece(item);
     return;
   }
 
@@ -285,14 +291,15 @@ function updatePiece(piece) {
   }
 }
 
-function renderCapturedPiece(piece) {
-  const el = document.createElement("span");
-  el.className = `captured-piece ${piece.side}`;
-  el.textContent = piece.name;
+function renderCapturedPiece(item) {
+  const { el } = item;
+  el.className = `captured-piece ${item.side}`;
+  el.style.left = "";
+  el.style.top = "";
 
-  if (piece.capturedBy === "red") {
+  if (item.side === "red") {
     redCaptured.appendChild(el);
-  } else if (piece.capturedBy === "black") {
+  } else if (item.side === "black") {
     blackCaptured.appendChild(el);
   }
 }
@@ -301,35 +308,105 @@ function startDrag(event) {
   unlockAudio();
   activePiece = event.currentTarget;
   activePointerId = event.pointerId;
+  activePointerPosition = { clientX: event.clientX, clientY: event.clientY };
+  const item = pieces.get(activePiece.dataset.id);
+  activeDragWasCaptured = Boolean(item?.captured);
+
+  if (activeDragWasCaptured) {
+    activePiece.className = `piece ${item.side}`;
+    board.appendChild(activePiece);
+  }
+
   activePiece.classList.add("dragging");
   activePiece.setPointerCapture(activePointerId);
   moveActivePiece(event);
 
-  activePiece.addEventListener("pointermove", moveActivePiece);
-  activePiece.addEventListener("pointerup", finishDrag, { once: true });
-  activePiece.addEventListener("pointercancel", finishDrag, { once: true });
+  window.addEventListener("pointermove", moveActivePiece);
+  window.addEventListener("pointerup", finishDrag);
+  window.addEventListener("pointercancel", finishDrag);
 }
 
 function moveActivePiece(event) {
   if (!activePiece || event.pointerId !== activePointerId) return;
 
+  activePointerPosition = { clientX: event.clientX, clientY: event.clientY };
+  autoScrollDuringDrag(event);
+
   const rect = board.getBoundingClientRect();
   const x = event.clientX - rect.left;
   const y = event.clientY - rect.top;
 
-  activePiece.style.left = `${Math.max(0, Math.min(rect.width, x))}px`;
-  activePiece.style.top = `${Math.max(0, Math.min(rect.height, y))}px`;
+  activePiece.style.left = `${x}px`;
+  activePiece.style.top = `${y}px`;
+}
+
+function autoScrollDuringDrag(event) {
+  if (window.innerWidth > 720) return;
+
+  const viewportHeight = window.visualViewport?.height || window.innerHeight;
+  const edgeSize = 56;
+  const scrollStep = 14;
+
+  if (event.clientY < edgeSize) {
+    window.scrollBy(0, -scrollStep);
+  } else if (event.clientY > viewportHeight - edgeSize) {
+    window.scrollBy(0, scrollStep);
+  }
 }
 
 function finishDrag(event) {
   if (!activePiece || event.pointerId !== activePointerId) return;
 
-  activePiece.removeEventListener("pointermove", moveActivePiece);
+  window.removeEventListener("pointermove", moveActivePiece);
+  window.removeEventListener("pointerup", finishDrag);
+  window.removeEventListener("pointercancel", finishDrag);
+  if (activePiece.hasPointerCapture(activePointerId)) {
+    activePiece.releasePointerCapture(activePointerId);
+  }
   activePiece.classList.remove("dragging");
 
   const grid = pointerToGrid(event);
   const pieceId = activePiece.dataset.id;
   const item = pieces.get(pieceId);
+
+  if (activeDragWasCaptured) {
+    const canRestore = event.type !== "pointercancel" && isPointerInsideBoard(event) && isEmptyGrid(grid.x, grid.y);
+
+    if (canRestore) {
+      socket.emit("restore-piece", { roomId, pieceId, x: grid.x, y: grid.y });
+    } else {
+      renderCapturedPiece(item);
+    }
+
+    activePiece = null;
+    activePointerId = null;
+    activeDragWasCaptured = false;
+    activePointerPosition = null;
+    return;
+  }
+
+
+  const targetZone = getPointerZone(activePointerPosition) || getElementZone(activePiece) || getPointerZone(event);
+  if (event.type !== "pointercancel" && targetZone === item.side) {
+    // Keep the piece at its authoritative board position until the server
+    // confirms the operation by broadcasting the updated room state.
+    placePiece(activePiece, item.x, item.y);
+    socket.emit("stow-piece", { roomId, pieceId });
+    activePiece = null;
+    activePointerId = null;
+    activeDragWasCaptured = false;
+    activePointerPosition = null;
+    return;
+  }
+
+  if (event.type === "pointercancel" || !isPointerInsideBoard(event)) {
+    placePiece(activePiece, item.x, item.y);
+    activePiece = null;
+    activePointerId = null;
+    activeDragWasCaptured = false;
+    activePointerPosition = null;
+    return;
+  }
 
   const didMove = item.x !== grid.x || item.y !== grid.y;
   item.x = grid.x;
@@ -345,6 +422,44 @@ function finishDrag(event) {
 
   activePiece = null;
   activePointerId = null;
+  activeDragWasCaptured = false;
+  activePointerPosition = null;
+}
+
+function isPointerInsideBoard(event) {
+  const rect = board.getBoundingClientRect();
+  return event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+}
+
+function getElementZone(element) {
+  const rect = element.getBoundingClientRect();
+  const center = {
+    clientX: rect.left + rect.width / 2,
+    clientY: rect.top + rect.height / 2
+  };
+
+  if (isPointerInsideElement(center, redCaptured.closest(".captured-panel"))) return "red";
+  if (isPointerInsideElement(center, blackCaptured.closest(".captured-panel"))) return "black";
+  return null;
+}
+
+function getPointerZone(event) {
+  if (isPointerInsideElement(event, redCaptured.closest(".captured-panel"))) return "red";
+  if (isPointerInsideElement(event, blackCaptured.closest(".captured-panel"))) return "black";
+  return null;
+}
+
+function isPointerInsideElement(event, element) {
+  const rect = element.getBoundingClientRect();
+  return event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+}
+
+function isEmptyGrid(x, y) {
+  for (const item of pieces.values()) {
+    if (!item.captured && item.x === x && item.y === y) return false;
+  }
+
+  return true;
 }
 
 function pointerToGrid(event) {

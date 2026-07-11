@@ -51,6 +51,7 @@ button:disabled {
 
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -70,6 +71,7 @@ h2 {
 
 .actions {
   display: flex;
+  flex: 1 1 560px;
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
@@ -83,9 +85,9 @@ h2 {
 
 .game {
   display: grid;
-  grid-template-columns: 112px minmax(0, 680px) 112px;
+  grid-template-columns: 190px minmax(0, 680px) 190px;
   justify-content: center;
-  align-items: start;
+  align-items: stretch;
   gap: 14px;
 }
 
@@ -98,11 +100,12 @@ h2 {
 }
 
 .board {
-  --edge-pad: clamp(42px, 7vw, 58px);
+  --edge-pad: 8.5%;
+  container-type: inline-size;
   position: relative;
   width: min(100%, 680px, 70vh);
   aspect-ratio: 8 / 9;
-  border: 12px solid #744019;
+  border: clamp(6px, 1.2vw, 12px) solid #744019;
   background:
     radial-gradient(circle at 28% 18%, rgba(255, 246, 218, 0.42), transparent 30%),
     radial-gradient(circle at 80% 82%, rgba(117, 63, 24, 0.2), transparent 34%),
@@ -121,8 +124,8 @@ h2 {
 .board::before {
   content: "";
   position: absolute;
-  inset: 10px;
-  border: 2px solid rgba(82, 43, 18, 0.48);
+  inset: 1.5%;
+  border: clamp(1px, 0.3cqw, 2px) solid rgba(82, 43, 18, 0.48);
   box-shadow:
     inset 0 0 0 1px rgba(255, 240, 196, 0.36),
     0 0 0 1px rgba(98, 51, 18, 0.14);
@@ -144,14 +147,13 @@ h2 {
 }
 
 .board-svg line {
-  vector-effect: non-scaling-stroke;
   stroke: var(--line);
-  stroke-width: 2;
+  stroke-width: 0.032;
   stroke-linecap: square;
 }
 
 .board-svg .palace-line {
-  stroke-width: 2.2;
+  stroke-width: 0.036;
 }
 
 .river {
@@ -165,7 +167,7 @@ h2 {
   justify-content: center;
   height: 11%;
   color: rgba(92, 49, 20, 0.56);
-  font-size: clamp(20px, 5vw, 40px);
+  font-size: 5.6cqw;
   font-family: "KaiTi", "STKaiti", serif;
   letter-spacing: 0;
   text-shadow: 0 1px 0 rgba(255, 230, 174, 0.52);
@@ -175,6 +177,14 @@ h2 {
 
 .board[data-view="black"] .river {
   transform: translateY(-50%) rotate(180deg);
+}
+
+.river-text {
+  display: inline-block;
+}
+
+.board[data-view="black"] .river-text {
+  transform: rotate(180deg);
 }
 
 .piece,
@@ -198,14 +208,15 @@ h2 {
 .piece {
   position: absolute;
   z-index: 2;
-  width: clamp(34px, 6.7vw, 54px);
-  height: clamp(34px, 6.7vw, 54px);
+  width: 8cqw;
+  height: 8cqw;
+  border-width: clamp(2px, 0.45cqw, 3px);
   padding: 0 0 2px;
   box-shadow:
     inset 0 -4px 8px rgba(92, 55, 17, 0.14),
     inset 0 2px 3px rgba(255, 255, 255, 0.72),
     0 6px 12px rgba(45, 24, 8, 0.3);
-  font-size: clamp(21px, 4.4vw, 33px);
+  font-size: 4.9cqw;
   transform: translate(-50%, -50%);
   cursor: grab;
   touch-action: none;
@@ -231,7 +242,10 @@ h2 {
 }
 
 .captured-panel {
-  min-height: 160px;
+  align-self: start;
+  width: 100%;
+  height: 50%;
+  min-height: 220px;
   padding: 12px;
   border: 1px solid rgba(122, 74, 35, 0.28);
   border-radius: 8px;
@@ -246,14 +260,17 @@ h2 {
 }
 
 .captured-list {
-  display: flex;
-  align-content: flex-start;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-content: start;
+  justify-items: center;
   gap: 8px;
-  min-height: 42px;
+  min-height: calc(100% - 32px);
 }
 
 .captured-piece {
+  cursor: grab;
+  touch-action: none;
   width: 34px;
   height: 34px;
   padding-bottom: 1px;
@@ -266,15 +283,31 @@ h2 {
 
 @media (max-width: 1100px) {
   .game {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .board-wrap {
-    grid-row: 1;
+    grid-template-columns: clamp(120px, 17vw, 170px) minmax(0, 680px) clamp(120px, 17vw, 170px);
+    gap: clamp(4px, 1vw, 10px);
   }
 
   .captured-panel {
-    min-height: auto;
+    height: 50%;
+    min-height: 150px;
+    padding: 7px 5px;
+  }
+
+  .captured-panel h2 {
+    margin-bottom: 7px;
+    font-size: clamp(11px, 2.2vw, 14px);
+    line-height: 1.35;
+  }
+
+  .captured-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 2px;
+  }
+
+  .captured-piece {
+    width: clamp(18px, 4vw, 30px);
+    height: clamp(18px, 4vw, 30px);
+    font-size: clamp(13px, 3vw, 19px);
   }
 }
 
@@ -289,12 +322,52 @@ h2 {
   }
 
   .actions {
-    justify-content: flex-start;
+    display: grid;
+    flex: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px;
+  }
+
+  .actions button {
+    width: 100%;
+    min-width: 0;
+    padding: 9px 8px;
+  }
+
+  #status {
+    grid-column: 1 / -1;
+  }
+
+  .game {
+    grid-template-columns: minmax(0, 680px);
+    gap: 12px;
+  }
+
+  .board-wrap {
+    grid-row: 1;
+  }
+
+  .captured-panel {
+    width: min(100%, 680px);
+    height: auto;
+    min-height: 150px;
+    justify-self: center;
+    padding: 10px;
+  }
+
+  .captured-list {
+    gap: 6px;
+    min-height: 100px;
+  }
+
+  .captured-piece {
+    width: 34px;
+    height: 34px;
+    font-size: 21px;
   }
 
   .board {
-    --edge-pad: clamp(34px, 9vw, 44px);
-    width: min(100%, 92vw, 68vh);
-    border-width: 8px;
+    width: min(100%, 680px);
   }
 }

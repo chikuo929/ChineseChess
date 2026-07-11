@@ -103,10 +103,7 @@ io.on("connection", (socket) => {
     const nextY = clamp(Number(y), 0, 9);
     if (targetPiece.x === nextX && targetPiece.y === nextY) return;
 
-    room.history.push(clonePieces(room.pieces));
-    if (room.history.length > 80) {
-      room.history.shift();
-    }
+    recordHistory(room);
 
     const capturedPiece = room.pieces.find((item) => {
       return !item.captured && item.id !== pieceId && item.side !== targetPiece.side && item.x === nextX && item.y === nextY;
@@ -121,6 +118,53 @@ io.on("connection", (socket) => {
 
     targetPiece.x = nextX;
     targetPiece.y = nextY;
+    io.to(targetRoomId).emit("room-state", publicRoom(room));
+  });
+
+  socket.on("restore-piece", ({ roomId, pieceId, x, y }) => {
+    const targetRoomId = String(roomId || currentRoomId || "default");
+    const room = getRoom(targetRoomId);
+    const targetPiece = room.pieces.find((item) => item.id === pieceId);
+    const nextX = boardCoordinate(x, 0, 8);
+    const nextY = boardCoordinate(y, 0, 9);
+
+    if (!targetPiece?.captured || nextX === null || nextY === null) {
+      socket.emit("room-state", publicRoom(room));
+      return;
+    }
+
+    const occupied = room.pieces.some((item) => !item.captured && item.x === nextX && item.y === nextY);
+    if (occupied) {
+      socket.emit("room-state", publicRoom(room));
+      return;
+    }
+
+    recordHistory(room);
+
+    targetPiece.x = nextX;
+    targetPiece.y = nextY;
+    targetPiece.captured = false;
+    targetPiece.capturedBy = null;
+    io.to(targetRoomId).emit("room-state", publicRoom(room));
+  });
+
+  socket.on("stow-piece", ({ roomId, pieceId }) => {
+    const targetRoomId = String(roomId || currentRoomId || "default");
+    const room = getRoom(targetRoomId);
+    const targetPiece = room.pieces.find((item) => item.id === pieceId);
+
+    if (!targetPiece || targetPiece.captured) {
+      socket.emit("room-state", publicRoom(room));
+      return;
+    }
+
+    recordHistory(room);
+
+    // Keep x/y as the last authoritative board intersection. The captured
+    // flag determines whether the piece is on the board or in its side area,
+    // while the history snapshot can restore every field without reconstruction.
+    targetPiece.captured = true;
+    targetPiece.capturedBy = null;
     io.to(targetRoomId).emit("room-state", publicRoom(room));
   });
 
@@ -156,9 +200,20 @@ function clonePieces(pieces) {
   return pieces.map((item) => ({ ...item }));
 }
 
+function recordHistory(room) {
+  room.history.push(clonePieces(room.pieces));
+  if (room.history.length > 80) room.history.shift();
+}
+
 function clamp(value, min, max) {
   if (!Number.isFinite(value)) return min;
   return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function boardCoordinate(value, min, max) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < min || number > max) return null;
+  return number;
 }
 
 server.listen(PORT, () => {

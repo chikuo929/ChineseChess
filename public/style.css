@@ -78,6 +78,14 @@ h2 {
   gap: 10px;
 }
 
+.setup-actions {
+  display: contents;
+}
+
+.setup-actions[hidden] {
+  display: none;
+}
+
 #status {
   min-width: 120px;
   font-size: 14px;
@@ -273,7 +281,7 @@ h2 {
   touch-action: none;
   width: 34px;
   height: 34px;
-  padding-bottom: 1px;
+  padding: 0 0 2px;
   border-width: 2px;
   font-size: 21px;
   box-shadow:

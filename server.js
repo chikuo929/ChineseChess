@@ -52,7 +52,14 @@ function piece(id, side, name, x, y) {
 }
 
 function createRoom() {
-  return { pieces: initialPieces(), history: [] };
+  const pieces = initialPieces();
+  return {
+    pieces,
+    startingPieces: clonePieces(pieces),
+    history: [],
+    setupMode: false,
+    setupSnapshot: null
+  };
 }
 
 function getRoom(roomId) {
@@ -66,7 +73,8 @@ function getRoom(roomId) {
 function publicRoom(room) {
   return {
     pieces: room.pieces,
-    canUndo: room.history.length > 0
+    canUndo: !room.setupMode && room.history.length > 0,
+    setupMode: room.setupMode
   };
 }
 
@@ -103,9 +111,20 @@ io.on("connection", (socket) => {
     const nextY = clamp(Number(y), 0, 9);
     if (targetPiece.x === nextX && targetPiece.y === nextY) return;
 
-    recordHistory(room);
+    if (room.setupMode) {
+      const occupied = room.pieces.some((item) => {
+        return !item.captured && item.id !== pieceId && item.x === nextX && item.y === nextY;
+      });
 
-    const capturedPiece = room.pieces.find((item) => {
+      if (occupied) {
+        socket.emit("room-state", publicRoom(room));
+        return;
+      }
+    }
+
+    if (!room.setupMode) recordHistory(room);
+
+    const capturedPiece = !room.setupMode && room.pieces.find((item) => {
       return !item.captured && item.id !== pieceId && item.side !== targetPiece.side && item.x === nextX && item.y === nextY;
     });
 
@@ -139,7 +158,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    recordHistory(room);
+    if (!room.setupMode) recordHistory(room);
 
     targetPiece.x = nextX;
     targetPiece.y = nextY;
@@ -158,7 +177,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    recordHistory(room);
+    if (!room.setupMode) recordHistory(room);
 
     // Keep x/y as the last authoritative board intersection. The captured
     // flag determines whether the piece is on the board or in its side area,
@@ -171,6 +190,7 @@ io.on("connection", (socket) => {
   socket.on("undo", (roomId) => {
     const targetRoomId = String(roomId || currentRoomId || "default");
     const room = getRoom(targetRoomId);
+    if (room.setupMode) return;
     const previousPieces = room.history.pop();
 
     if (!previousPieces) return;
@@ -181,8 +201,67 @@ io.on("connection", (socket) => {
   socket.on("reset-board", (roomId) => {
     const targetRoomId = String(roomId || currentRoomId || "default");
     const room = getRoom(targetRoomId);
-    room.pieces = initialPieces();
+    if (room.setupMode) return;
+    room.pieces = clonePieces(room.startingPieces);
     room.history = [];
+    io.to(targetRoomId).emit("room-state", publicRoom(room));
+  });
+
+  socket.on("start-setup", (roomId) => {
+    const targetRoomId = String(roomId || currentRoomId || "default");
+    const room = getRoom(targetRoomId);
+    if (room.setupMode) return;
+
+    room.setupSnapshot = {
+      pieces: clonePieces(room.pieces),
+      history: cloneHistory(room.history)
+    };
+    room.setupMode = true;
+    io.to(targetRoomId).emit("room-state", publicRoom(room));
+  });
+
+  socket.on("clear-setup-board", (roomId) => {
+    const targetRoomId = String(roomId || currentRoomId || "default");
+    const room = getRoom(targetRoomId);
+    if (!room.setupMode) return;
+
+    room.pieces.forEach((item) => {
+      item.captured = true;
+      item.capturedBy = null;
+    });
+    io.to(targetRoomId).emit("room-state", publicRoom(room));
+  });
+
+  socket.on("restore-standard-setup", (roomId) => {
+    const targetRoomId = String(roomId || currentRoomId || "default");
+    const room = getRoom(targetRoomId);
+    if (!room.setupMode) return;
+
+    room.pieces = initialPieces();
+    io.to(targetRoomId).emit("room-state", publicRoom(room));
+  });
+
+  socket.on("finish-setup", (roomId) => {
+    const targetRoomId = String(roomId || currentRoomId || "default");
+    const room = getRoom(targetRoomId);
+    if (!room.setupMode) return;
+
+    room.startingPieces = clonePieces(room.pieces);
+    room.history = [];
+    room.setupMode = false;
+    room.setupSnapshot = null;
+    io.to(targetRoomId).emit("room-state", publicRoom(room));
+  });
+
+  socket.on("cancel-setup", (roomId) => {
+    const targetRoomId = String(roomId || currentRoomId || "default");
+    const room = getRoom(targetRoomId);
+    if (!room.setupMode || !room.setupSnapshot) return;
+
+    room.pieces = clonePieces(room.setupSnapshot.pieces);
+    room.history = cloneHistory(room.setupSnapshot.history);
+    room.setupMode = false;
+    room.setupSnapshot = null;
     io.to(targetRoomId).emit("room-state", publicRoom(room));
   });
 
@@ -198,6 +277,10 @@ function emitPlayerCount(roomId) {
 
 function clonePieces(pieces) {
   return pieces.map((item) => ({ ...item }));
+}
+
+function cloneHistory(history) {
+  return history.map((pieces) => clonePieces(pieces));
 }
 
 function recordHistory(room) {

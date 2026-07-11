@@ -7,6 +7,12 @@ const resetButton = document.querySelector("#resetButton");
 const copyLinkButton = document.querySelector("#copyLinkButton");
 const viewButton = document.querySelector("#viewButton");
 const undoButton = document.querySelector("#undoButton");
+const setupButton = document.querySelector("#setupButton");
+const setupActions = document.querySelector("#setupActions");
+const clearSetupButton = document.querySelector("#clearSetupButton");
+const standardSetupButton = document.querySelector("#standardSetupButton");
+const finishSetupButton = document.querySelector("#finishSetupButton");
+const cancelSetupButton = document.querySelector("#cancelSetupButton");
 const redCaptured = document.querySelector("#redCaptured");
 const blackCaptured = document.querySelector("#blackCaptured");
 
@@ -22,6 +28,7 @@ let lastRoomSnapshot = null;
 let suppressNextMoveSound = false;
 let audioContext = null;
 let fallbackMoveAudio = null;
+let setupMode = false;
 
 roomLabel.textContent = `\u623f\u95f4\uff1a${roomId}`;
 
@@ -42,7 +49,7 @@ socket.on("player-count", (count) => {
   statusEl.textContent = `\u5728\u7ebf\uff1a${count} \u4eba`;
 });
 
-socket.on("room-state", ({ pieces: serverPieces, canUndo }) => {
+socket.on("room-state", ({ pieces: serverPieces, canUndo, setupMode: serverSetupMode }) => {
   const nextSnapshot = snapshotPieces(serverPieces);
 
   if (lastRoomSnapshot && nextSnapshot !== lastRoomSnapshot) {
@@ -56,6 +63,8 @@ socket.on("room-state", ({ pieces: serverPieces, canUndo }) => {
   lastRoomSnapshot = nextSnapshot;
   renderPieces(serverPieces);
   undoButton.disabled = !canUndo;
+  setupMode = Boolean(serverSetupMode);
+  syncSetupControls();
 });
 
 resetButton.addEventListener("click", () => {
@@ -64,6 +73,32 @@ resetButton.addEventListener("click", () => {
 
 undoButton.addEventListener("click", () => {
   socket.emit("undo", roomId);
+});
+
+setupButton.addEventListener("click", () => {
+  socket.emit("start-setup", roomId);
+});
+
+clearSetupButton.addEventListener("click", () => {
+  if (window.confirm("确定要清空棋盘吗？所有棋子会移回各自棋子区。")) {
+    socket.emit("clear-setup-board", roomId);
+  }
+});
+
+standardSetupButton.addEventListener("click", () => {
+  if (window.confirm("确定要恢复标准开局吗？当前布置将被替换。")) {
+    socket.emit("restore-standard-setup", roomId);
+  }
+});
+
+finishSetupButton.addEventListener("click", () => {
+  socket.emit("finish-setup", roomId);
+});
+
+cancelSetupButton.addEventListener("click", () => {
+  if (window.confirm("确定要取消布置吗？将恢复进入布置模式前的完整局面。")) {
+    socket.emit("cancel-setup", roomId);
+  }
 });
 
 viewButton.addEventListener("click", () => {
@@ -408,6 +443,15 @@ function finishDrag(event) {
     return;
   }
 
+  if (setupMode && !isEmptyGrid(grid.x, grid.y)) {
+    placePiece(activePiece, item.x, item.y);
+    activePiece = null;
+    activePointerId = null;
+    activeDragWasCaptured = false;
+    activePointerPosition = null;
+    return;
+  }
+
   const didMove = item.x !== grid.x || item.y !== grid.y;
   item.x = grid.x;
   item.y = grid.y;
@@ -518,6 +562,14 @@ function visualToBoard(x, y) {
 function syncViewButton() {
   viewButton.textContent = viewSide === "red" ? "\u5207\u5230\u9ed1\u65b9\u89c6\u89d2" : "\u5207\u5230\u7ea2\u65b9\u89c6\u89d2";
   board.dataset.view = viewSide;
+}
+
+function syncSetupControls() {
+  setupButton.hidden = setupMode;
+  setupActions.hidden = !setupMode;
+  undoButton.disabled = setupMode || undoButton.disabled;
+  resetButton.disabled = setupMode;
+  board.classList.toggle("setup-mode", setupMode);
 }
 
 function clamp(value, min, max) {

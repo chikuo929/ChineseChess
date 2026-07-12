@@ -16,6 +16,7 @@
         <div class="actions">
           <span id="status">&#36830;&#25509;&#20013;...</span>
           <button id="viewButton" type="button">&#20999;&#25442;&#35270;&#35282;</button>
+          <button id="annotationModeButton" type="button" aria-pressed="false">&#35762;&#35299;&#27169;&#24335;</button>
           <button id="undoButton" type="button" disabled>&#36864;&#19968;&#27493;</button>
           <button id="copyLinkButton" type="button">&#22797;&#21046;&#25151;&#38388;&#38142;&#25509;</button>
           <button id="resetButton" type="button">&#37325;&#32622;&#26827;&#30424;</button>
@@ -28,6 +29,20 @@
           </div>
         </div>
       </header>
+
+      <section id="annotationToolbar" class="annotation-toolbar" aria-label="&#35762;&#35299;&#24037;&#20855;" hidden>
+        <span class="annotation-hint">&#25302;&#21160;&#26827;&#30424;&#30011;&#31661;&#22836;&#25110;&#22280;&#36873;&#37325;&#28857;</span>
+        <div class="annotation-tool-group" role="group" aria-label="&#26631;&#27880;&#31867;&#22411;">
+          <button class="annotation-tool active" data-tool="arrow" type="button" aria-pressed="true">&#31661;&#22836;</button>
+          <button class="annotation-tool" data-tool="circle" type="button" aria-pressed="false">&#22280;&#36873;</button>
+        </div>
+        <div class="annotation-tool-group" role="group" aria-label="&#26631;&#27880;&#39068;&#33394;">
+          <button class="color-tool red active" data-color="red" type="button" aria-label="&#32418;&#33394;" aria-pressed="true"></button>
+          <button class="color-tool blue" data-color="blue" type="button" aria-label="&#34013;&#33394;" aria-pressed="false"></button>
+        </div>
+        <button id="undoAnnotationButton" type="button" disabled>&#25764;&#38144;&#26631;&#27880;</button>
+        <button id="clearAnnotationsButton" type="button" disabled>&#28165;&#38500;&#20840;&#37096;</button>
+      </section>
 
       <section class="game">
         <aside class="captured-panel">

@@ -9,6 +9,7 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 const rooms = new Map();
+let annotationSequence = 0;
 
 function initialPieces() {
   return [
@@ -58,7 +59,8 @@ function createRoom() {
     startingPieces: clonePieces(pieces),
     history: [],
     setupMode: false,
-    setupSnapshot: null
+    setupSnapshot: null,
+    annotations: []
   };
 }
 
@@ -74,7 +76,8 @@ function publicRoom(room) {
   return {
     pieces: room.pieces,
     canUndo: !room.setupMode && room.history.length > 0,
-    setupMode: room.setupMode
+    setupMode: room.setupMode,
+    annotations: room.annotations
   };
 }
 
@@ -204,7 +207,46 @@ io.on("connection", (socket) => {
     if (room.setupMode) return;
     room.pieces = clonePieces(room.startingPieces);
     room.history = [];
+    room.annotations = [];
     io.to(targetRoomId).emit("room-state", publicRoom(room));
+  });
+
+  socket.on("annotation-preview", ({ roomId, annotation }) => {
+    const targetRoomId = String(roomId || currentRoomId || "default");
+    if (targetRoomId !== currentRoomId) return;
+
+    const preview = annotation === null ? null : sanitizeAnnotation(annotation, false);
+    if (annotation !== null && !preview) return;
+    socket.to(targetRoomId).emit("annotation-preview", { clientId: socket.id, annotation: preview });
+  });
+
+  socket.on("annotation-add", ({ roomId, annotation }) => {
+    const targetRoomId = String(roomId || currentRoomId || "default");
+    if (targetRoomId !== currentRoomId) return;
+
+    const clean = sanitizeAnnotation(annotation, true);
+    if (!clean) return;
+    const room = getRoom(targetRoomId);
+    room.annotations.push(clean);
+    if (room.annotations.length > 100) room.annotations.shift();
+    io.to(targetRoomId).emit("annotations-state", room.annotations);
+    socket.to(targetRoomId).emit("annotation-preview", { clientId: socket.id, annotation: null });
+  });
+
+  socket.on("annotation-undo", (roomId) => {
+    const targetRoomId = String(roomId || currentRoomId || "default");
+    if (targetRoomId !== currentRoomId) return;
+    const room = getRoom(targetRoomId);
+    room.annotations.pop();
+    io.to(targetRoomId).emit("annotations-state", room.annotations);
+  });
+
+  socket.on("annotations-clear", (roomId) => {
+    const targetRoomId = String(roomId || currentRoomId || "default");
+    if (targetRoomId !== currentRoomId) return;
+    const room = getRoom(targetRoomId);
+    room.annotations = [];
+    io.to(targetRoomId).emit("annotations-state", room.annotations);
   });
 
   socket.on("start-setup", (roomId) => {
@@ -267,6 +309,7 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     if (!currentRoomId) return;
+    io.to(currentRoomId).emit("annotation-preview", { clientId: socket.id, annotation: null });
     emitPlayerCount(currentRoomId);
   });
 });
@@ -297,6 +340,42 @@ function boardCoordinate(value, min, max) {
   const number = Number(value);
   if (!Number.isInteger(number) || number < min || number > max) return null;
   return number;
+}
+
+function sanitizeAnnotation(value, assignId) {
+  if (!value || !["arrow", "circle"].includes(value.type) || !["red", "blue"].includes(value.color)) {
+    return null;
+  }
+
+  if (value.type === "arrow") {
+    const coordinates = [value.x1, value.y1, value.x2, value.y2].map((item) => Number(item));
+    if (!coordinates.every(Number.isFinite)) return null;
+    const [x1, y1, x2, y2] = coordinates;
+    return {
+      ...(assignId ? { id: `mark-${Date.now()}-${annotationSequence += 1}` } : {}),
+      type: "arrow",
+      color: value.color,
+      x1: decimalClamp(x1, 0, 8),
+      y1: decimalClamp(y1, 0, 9),
+      x2: decimalClamp(x2, 0, 8),
+      y2: decimalClamp(y2, 0, 9)
+    };
+  }
+
+  const coordinates = [value.x, value.y, value.r].map((item) => Number(item));
+  if (!coordinates.every(Number.isFinite)) return null;
+  return {
+    ...(assignId ? { id: `mark-${Date.now()}-${annotationSequence += 1}` } : {}),
+    type: "circle",
+    color: value.color,
+    x: decimalClamp(coordinates[0], 0, 8),
+    y: decimalClamp(coordinates[1], 0, 9),
+    r: decimalClamp(coordinates[2], 0.35, 4)
+  };
+}
+
+function decimalClamp(value, min, max) {
+  return Math.max(min, Math.min(max, Math.round(value * 1000) / 1000));
 }
 
 server.listen(PORT, () => {

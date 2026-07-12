@@ -15,6 +15,12 @@ const finishSetupButton = document.querySelector("#finishSetupButton");
 const cancelSetupButton = document.querySelector("#cancelSetupButton");
 const redCaptured = document.querySelector("#redCaptured");
 const blackCaptured = document.querySelector("#blackCaptured");
+const annotationModeButton = document.querySelector("#annotationModeButton");
+const annotationToolbar = document.querySelector("#annotationToolbar");
+const undoAnnotationButton = document.querySelector("#undoAnnotationButton");
+const clearAnnotationsButton = document.querySelector("#clearAnnotationsButton");
+const annotationToolButtons = [...document.querySelectorAll(".annotation-tool")];
+const annotationColorButtons = [...document.querySelectorAll(".color-tool")];
 
 const roomId = getRoomId();
 const pieces = new Map();
@@ -29,6 +35,16 @@ let suppressNextMoveSound = false;
 let audioContext = null;
 let fallbackMoveAudio = null;
 let setupMode = false;
+let annotationLayer = null;
+let annotationMarksGroup = null;
+let annotationMode = false;
+let annotationTool = "arrow";
+let annotationColor = "red";
+let annotations = [];
+let annotationDraft = null;
+let annotationPointerId = null;
+let lastPreviewSentAt = 0;
+const remoteAnnotationDrafts = new Map();
 
 roomLabel.textContent = `\u623f\u95f4\uff1a${roomId}`;
 
@@ -49,7 +65,7 @@ socket.on("player-count", (count) => {
   statusEl.textContent = `\u5728\u7ebf\uff1a${count} \u4eba`;
 });
 
-socket.on("room-state", ({ pieces: serverPieces, canUndo, setupMode: serverSetupMode }) => {
+socket.on("room-state", ({ pieces: serverPieces, canUndo, setupMode: serverSetupMode, annotations: serverAnnotations = [] }) => {
   const nextSnapshot = snapshotPieces(serverPieces);
 
   if (lastRoomSnapshot && nextSnapshot !== lastRoomSnapshot) {
@@ -64,7 +80,24 @@ socket.on("room-state", ({ pieces: serverPieces, canUndo, setupMode: serverSetup
   renderPieces(serverPieces);
   undoButton.disabled = !canUndo;
   setupMode = Boolean(serverSetupMode);
+  annotations = serverAnnotations;
+  remoteAnnotationDrafts.clear();
+  renderAnnotations();
   syncSetupControls();
+});
+
+socket.on("annotations-state", (serverAnnotations) => {
+  annotations = Array.isArray(serverAnnotations) ? serverAnnotations : [];
+  renderAnnotations();
+});
+
+socket.on("annotation-preview", ({ clientId, annotation }) => {
+  if (annotation) {
+    remoteAnnotationDrafts.set(clientId, annotation);
+  } else {
+    remoteAnnotationDrafts.delete(clientId);
+  }
+  renderAnnotations();
 });
 
 resetButton.addEventListener("click", () => {
@@ -106,6 +139,37 @@ viewButton.addEventListener("click", () => {
   localStorage.setItem("xiangqi-view-side", viewSide);
   syncViewButton();
   placeAllPieces();
+  renderAnnotations();
+});
+
+annotationModeButton.addEventListener("click", () => {
+  setAnnotationMode(!annotationMode);
+});
+
+annotationToolButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    annotationTool = button.dataset.tool;
+    syncAnnotationControls();
+  });
+});
+
+annotationColorButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    annotationColor = button.dataset.color;
+    syncAnnotationControls();
+  });
+});
+
+undoAnnotationButton.addEventListener("click", () => {
+  socket.emit("annotation-undo", roomId);
+});
+
+clearAnnotationsButton.addEventListener("click", () => {
+  socket.emit("annotations-clear", roomId);
+});
+
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && annotationDraft) cancelAnnotationDraft();
 });
 
 copyLinkButton.addEventListener("click", async () => {
@@ -161,6 +225,39 @@ function drawBoard() {
 
   gridLayer.appendChild(svg);
   board.prepend(gridLayer);
+
+  annotationLayer = createSvgElement("svg");
+  annotationLayer.classList.add("annotation-layer");
+  annotationLayer.setAttribute("viewBox", "0 0 8 9");
+  annotationLayer.setAttribute("preserveAspectRatio", "none");
+  annotationLayer.setAttribute("aria-label", "棋盘讲解标注层");
+
+  const defs = createSvgElement("defs");
+  defs.appendChild(createArrowMarker("annotation-arrow-red", "#d52b28"));
+  defs.appendChild(createArrowMarker("annotation-arrow-blue", "#2563c9"));
+  annotationLayer.appendChild(defs);
+
+  annotationMarksGroup = createSvgElement("g");
+  annotationLayer.appendChild(annotationMarksGroup);
+  annotationLayer.addEventListener("pointerdown", startAnnotation);
+  board.appendChild(annotationLayer);
+}
+
+function createArrowMarker(id, color) {
+  const marker = createSvgElement("marker");
+  marker.setAttribute("id", id);
+  marker.setAttribute("viewBox", "0 0 4 2");
+  marker.setAttribute("refX", "3.5");
+  marker.setAttribute("refY", "1");
+  marker.setAttribute("markerWidth", "3.5");
+  marker.setAttribute("markerHeight", "3.5");
+  marker.setAttribute("orient", "auto-start-reverse");
+
+  const path = createSvgElement("path");
+  path.setAttribute("d", "M 0 0 L 4 1 L 0 2 Z");
+  path.setAttribute("fill", color);
+  marker.appendChild(path);
+  return marker;
 }
 
 function createSvgElement(tagName) {
@@ -565,11 +662,177 @@ function syncViewButton() {
 }
 
 function syncSetupControls() {
+  if (setupMode && annotationMode) setAnnotationMode(false);
   setupButton.hidden = setupMode;
   setupActions.hidden = !setupMode;
+  annotationModeButton.disabled = setupMode;
   undoButton.disabled = setupMode || undoButton.disabled;
   resetButton.disabled = setupMode;
   board.classList.toggle("setup-mode", setupMode);
+}
+
+function setAnnotationMode(enabled) {
+  annotationMode = Boolean(enabled) && !setupMode;
+  annotationModeButton.setAttribute("aria-pressed", String(annotationMode));
+  annotationModeButton.textContent = annotationMode ? "退出讲解" : "讲解模式";
+  annotationToolbar.hidden = !annotationMode;
+  board.classList.toggle("annotation-mode", annotationMode);
+
+  if (!annotationMode && annotationDraft) cancelAnnotationDraft();
+  syncAnnotationControls();
+}
+
+function syncAnnotationControls() {
+  annotationToolButtons.forEach((button) => {
+    const active = button.dataset.tool === annotationTool;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+
+  annotationColorButtons.forEach((button) => {
+    const active = button.dataset.color === annotationColor;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+
+  const hasAnnotations = annotations.length > 0;
+  undoAnnotationButton.disabled = !hasAnnotations;
+  clearAnnotationsButton.disabled = !hasAnnotations;
+}
+
+function startAnnotation(event) {
+  if (!annotationMode || event.button !== 0) return;
+  event.preventDefault();
+
+  annotationPointerId = event.pointerId;
+  annotationLayer.setPointerCapture(annotationPointerId);
+  const point = annotationPointFromPointer(event, true);
+
+  annotationDraft = annotationTool === "circle"
+    ? { type: "circle", color: annotationColor, x: point.x, y: point.y, r: 0.45 }
+    : { type: "arrow", color: annotationColor, x1: point.x, y1: point.y, x2: point.x, y2: point.y };
+
+  annotationLayer.addEventListener("pointermove", moveAnnotation);
+  annotationLayer.addEventListener("pointerup", finishAnnotation);
+  annotationLayer.addEventListener("pointercancel", cancelAnnotationDraft);
+  renderAnnotations();
+  sendAnnotationPreview(true);
+}
+
+function moveAnnotation(event) {
+  if (!annotationDraft || event.pointerId !== annotationPointerId) return;
+  event.preventDefault();
+  const point = annotationPointFromPointer(event, annotationDraft.type === "arrow");
+
+  if (annotationDraft.type === "arrow") {
+    annotationDraft.x2 = point.x;
+    annotationDraft.y2 = point.y;
+  } else {
+    const dx = point.x - annotationDraft.x;
+    const dy = point.y - annotationDraft.y;
+    annotationDraft.r = clamp(Math.sqrt(dx * dx + dy * dy), 0.35, 4);
+  }
+
+  renderAnnotations();
+  sendAnnotationPreview();
+}
+
+function finishAnnotation(event) {
+  if (!annotationDraft || event.pointerId !== annotationPointerId) return;
+  const finished = annotationDraft;
+  const isEmptyArrow = finished.type === "arrow" && finished.x1 === finished.x2 && finished.y1 === finished.y2;
+  releaseAnnotationPointer();
+  annotationDraft = null;
+  socket.emit("annotation-preview", { roomId, annotation: null });
+
+  if (!isEmptyArrow) {
+    socket.emit("annotation-add", { roomId, annotation: finished });
+  }
+  renderAnnotations();
+}
+
+function cancelAnnotationDraft(event) {
+  if (event?.pointerId !== undefined && event.pointerId !== annotationPointerId) return;
+  releaseAnnotationPointer();
+  annotationDraft = null;
+  socket.emit("annotation-preview", { roomId, annotation: null });
+  renderAnnotations();
+}
+
+function releaseAnnotationPointer() {
+  annotationLayer.removeEventListener("pointermove", moveAnnotation);
+  annotationLayer.removeEventListener("pointerup", finishAnnotation);
+  annotationLayer.removeEventListener("pointercancel", cancelAnnotationDraft);
+  if (annotationPointerId !== null && annotationLayer.hasPointerCapture(annotationPointerId)) {
+    annotationLayer.releasePointerCapture(annotationPointerId);
+  }
+  annotationPointerId = null;
+}
+
+function annotationPointFromPointer(event, snapToGrid) {
+  const rect = annotationLayer.getBoundingClientRect();
+  let visualX = clamp(((event.clientX - rect.left) / rect.width) * 8, 0, 8);
+  let visualY = clamp(((event.clientY - rect.top) / rect.height) * 9, 0, 9);
+  if (snapToGrid) {
+    visualX = Math.round(visualX);
+    visualY = Math.round(visualY);
+  }
+  return visualToBoard(visualX, visualY);
+}
+
+function sendAnnotationPreview(immediate = false) {
+  const now = performance.now();
+  if (!immediate && now - lastPreviewSentAt < 45) return;
+  lastPreviewSentAt = now;
+  socket.emit("annotation-preview", { roomId, annotation: annotationDraft });
+}
+
+function renderAnnotations() {
+  if (!annotationMarksGroup) return;
+  annotationMarksGroup.replaceChildren();
+
+  annotations.forEach((annotation) => {
+    annotationMarksGroup.appendChild(createAnnotationElement(annotation));
+  });
+
+  remoteAnnotationDrafts.forEach((annotation) => {
+    const element = createAnnotationElement(annotation);
+    element.classList.add("remote-preview");
+    annotationMarksGroup.appendChild(element);
+  });
+
+  if (annotationDraft) {
+    const element = createAnnotationElement(annotationDraft);
+    element.classList.add("local-preview");
+    annotationMarksGroup.appendChild(element);
+  }
+
+  syncAnnotationControls();
+}
+
+function createAnnotationElement(annotation) {
+  if (annotation.type === "circle") {
+    const center = boardToVisual(annotation.x, annotation.y);
+    const circle = createSvgElement("circle");
+    circle.setAttribute("cx", center.x);
+    circle.setAttribute("cy", center.y);
+    circle.setAttribute("r", annotation.r);
+    circle.setAttribute("stroke-width", "5");
+    circle.setAttribute("class", `annotation-mark ${annotation.color}`);
+    return circle;
+  }
+
+  const start = boardToVisual(annotation.x1, annotation.y1);
+  const end = boardToVisual(annotation.x2, annotation.y2);
+  const line = createSvgElement("line");
+  line.setAttribute("x1", start.x);
+  line.setAttribute("y1", start.y);
+  line.setAttribute("x2", end.x);
+  line.setAttribute("y2", end.y);
+  line.setAttribute("stroke-width", "5");
+  line.setAttribute("marker-end", `url(#annotation-arrow-${annotation.color})`);
+  line.setAttribute("class", `annotation-mark ${annotation.color}`);
+  return line;
 }
 
 function clamp(value, min, max) {

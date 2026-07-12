@@ -86,6 +86,68 @@ h2 {
   display: none;
 }
 
+.annotation-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin: 0 auto 12px;
+  padding: 9px 12px;
+  border: 1px solid rgba(122, 74, 35, 0.28);
+  border-radius: 10px;
+  background: rgba(255, 248, 236, 0.92);
+  box-shadow: 0 5px 18px rgba(77, 46, 14, 0.1);
+}
+
+.annotation-toolbar[hidden] { display: none; }
+
+.annotation-hint {
+  margin-right: 4px;
+  color: #6d482d;
+  font-size: 14px;
+}
+
+.annotation-tool-group {
+  display: inline-flex;
+  gap: 5px;
+  padding-right: 4px;
+  border-right: 1px solid rgba(122, 74, 35, 0.2);
+}
+
+.annotation-tool.active,
+#annotationModeButton[aria-pressed="true"] {
+  color: #fffaf0;
+  background: #744019;
+}
+
+.color-tool {
+  position: relative;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.color-tool::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 1px 4px rgba(45, 24, 8, 0.25);
+}
+
+.color-tool.red { color: #d52b28; }
+.color-tool.blue { color: #2563c9; }
+
+.color-tool.active {
+  border-color: currentColor;
+  background: rgba(255, 255, 255, 0.66);
+}
+
 #status {
   min-width: 120px;
   font-size: 14px;
@@ -163,6 +225,36 @@ h2 {
 .board-svg .palace-line {
   stroke-width: 0.036;
 }
+
+.annotation-layer {
+  position: absolute;
+  inset: var(--edge-pad);
+  z-index: 6;
+  width: calc(100% - var(--edge-pad) * 2);
+  height: calc(100% - var(--edge-pad) * 2);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.board.annotation-mode .annotation-layer {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+.annotation-mark {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 1px 1px rgba(255, 248, 225, 0.9));
+  pointer-events: none;
+}
+
+.annotation-mark.red { stroke: #d52b28; }
+.annotation-mark.blue { stroke: #2563c9; }
+
+.annotation-mark.remote-preview,
+.annotation-mark.local-preview { opacity: 0.72; }
 
 .river {
   position: absolute;
@@ -345,6 +437,16 @@ h2 {
 
   #status {
     grid-column: 1 / -1;
+  }
+
+  .annotation-toolbar {
+    justify-content: flex-start;
+    padding: 8px;
+  }
+
+  .annotation-hint {
+    flex: 1 0 100%;
+    text-align: center;
   }
 
   .game {

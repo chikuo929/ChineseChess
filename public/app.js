@@ -13,6 +13,13 @@ const clearSetupButton = document.querySelector("#clearSetupButton");
 const standardSetupButton = document.querySelector("#standardSetupButton");
 const finishSetupButton = document.querySelector("#finishSetupButton");
 const cancelSetupButton = document.querySelector("#cancelSetupButton");
+const imageSetupButton = document.querySelector("#imageSetupButton");
+const imageSetupInput = document.querySelector("#imageSetupInput");
+const imageSetupStatus = document.querySelector("#imageSetupStatus");
+const imageSetupDialog = document.querySelector("#imageSetupDialog");
+const imageDropZone = document.querySelector("#imageDropZone");
+const closeImageSetupButton = document.querySelector("#closeImageSetupButton");
+const cancelImageSetupButton = document.querySelector("#cancelImageSetupButton");
 const redCaptured = document.querySelector("#redCaptured");
 const blackCaptured = document.querySelector("#blackCaptured");
 const annotationModeButton = document.querySelector("#annotationModeButton");
@@ -44,6 +51,7 @@ let annotations = [];
 let annotationDraft = null;
 let annotationPointerId = null;
 let lastPreviewSentAt = 0;
+let imageRecognitionBusy = false;
 const remoteAnnotationDrafts = new Map();
 
 roomLabel.textContent = `\u623f\u95f4\uff1a${roomId}`;
@@ -112,6 +120,51 @@ setupButton.addEventListener("click", () => {
   socket.emit("start-setup", roomId);
 });
 
+imageSetupButton.addEventListener("click", () => {
+  if (setupMode || imageRecognitionBusy) return;
+  openImageSetupDialog();
+});
+
+imageSetupInput.addEventListener("change", () => {
+  const [file] = imageSetupInput.files;
+  if (file) acceptImageSetupFile(file);
+});
+
+closeImageSetupButton.addEventListener("click", closeImageSetupDialog);
+cancelImageSetupButton.addEventListener("click", closeImageSetupDialog);
+
+imageSetupDialog.addEventListener("click", (event) => {
+  if (event.target === imageSetupDialog) closeImageSetupDialog();
+});
+
+["dragenter", "dragover"].forEach((eventName) => {
+  imageDropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    imageDropZone.classList.add("dragging");
+  });
+});
+
+["dragleave", "dragend"].forEach((eventName) => {
+  imageDropZone.addEventListener(eventName, () => {
+    imageDropZone.classList.remove("dragging");
+  });
+});
+
+imageDropZone.addEventListener("drop", (event) => {
+  event.preventDefault();
+  imageDropZone.classList.remove("dragging");
+  const [file] = event.dataTransfer.files;
+  if (file) acceptImageSetupFile(file);
+});
+
+imageDropZone.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    imageSetupInput.click();
+  }
+});
+
 clearSetupButton.addEventListener("click", () => {
   if (window.confirm("确定要清空棋盘吗？所有棋子会移回各自棋子区。")) {
     socket.emit("clear-setup-board", roomId);
@@ -130,6 +183,7 @@ finishSetupButton.addEventListener("click", () => {
 
 cancelSetupButton.addEventListener("click", () => {
   if (window.confirm("确定要取消布置吗？将恢复进入布置模式前的完整局面。")) {
+    setImageSetupStatus("");
     socket.emit("cancel-setup", roomId);
   }
 });
@@ -169,6 +223,10 @@ clearAnnotationsButton.addEventListener("click", () => {
 });
 
 window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !imageSetupDialog.hidden) {
+    closeImageSetupDialog();
+    return;
+  }
   if (event.key === "Escape" && annotationDraft) cancelAnnotationDraft();
 });
 
@@ -193,6 +251,77 @@ function getRoomId() {
   const pathMatch = window.location.pathname.match(/^\/room\/([^/]+)$/);
   const queryRoom = new URLSearchParams(window.location.search).get("room");
   return decodeURIComponent(pathMatch?.[1] || queryRoom || "default");
+}
+
+function openImageSetupDialog() {
+  imageSetupInput.value = "";
+  setImageSetupStatus("");
+  imageDropZone.classList.remove("dragging");
+  imageSetupDialog.hidden = false;
+  document.body.classList.add("modal-open");
+  imageDropZone.focus();
+}
+
+function closeImageSetupDialog() {
+  imageSetupDialog.hidden = true;
+  imageDropZone.classList.remove("dragging");
+  document.body.classList.remove("modal-open");
+  imageSetupInput.value = "";
+  imageSetupButton.focus();
+}
+
+function acceptImageSetupFile(file) {
+  closeImageSetupDialog();
+  recognizeImageSetup(file);
+}
+
+async function recognizeImageSetup(file) {
+  if (file.size > 15 * 1024 * 1024) {
+    setImageSetupStatus("图片不能超过 15 MB。", true);
+    return;
+  }
+
+  if (!window.XiangqiImageRecognizer) {
+    setImageSetupStatus("图片识别组件加载失败，请刷新页面后重试。", true);
+    return;
+  }
+
+  setImageRecognitionBusy(true);
+  setImageSetupStatus("正在寻找棋盘并识别棋子…");
+
+  try {
+    const result = await window.XiangqiImageRecognizer.recognize(file);
+    setImageSetupStatus(`已识别 ${result.pieces.length} 枚棋子，正在生成残局…`);
+    const response = await applyRecognizedSetup(result.pieces);
+    if (!response?.ok) throw new Error(response?.message || "残局生成失败，请重试。");
+    setImageSetupStatus("残局预览已生成，可以直接拖动棋子修正。");
+  } catch (error) {
+    setImageSetupStatus(error?.message || "图片识别失败，请换一张清晰截图重试。", true);
+  } finally {
+    imageSetupInput.value = "";
+    setImageRecognitionBusy(false);
+  }
+}
+
+function applyRecognizedSetup(recognizedPieces) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("房间响应超时，请检查网络后重试。")), 8000);
+    socket.emit("apply-recognized-setup", { roomId, pieces: recognizedPieces }, (response) => {
+      clearTimeout(timeout);
+      resolve(response);
+    });
+  });
+}
+
+function setImageRecognitionBusy(busy) {
+  imageRecognitionBusy = Boolean(busy);
+  imageSetupButton.disabled = imageRecognitionBusy;
+  imageSetupButton.textContent = imageRecognitionBusy ? "识别中…" : "图片摆局";
+}
+
+function setImageSetupStatus(message, isError = false) {
+  imageSetupStatus.textContent = message;
+  imageSetupStatus.classList.toggle("error", Boolean(message) && isError);
 }
 
 function drawBoard() {
@@ -664,6 +793,7 @@ function syncViewButton() {
 function syncSetupControls() {
   if (setupMode && annotationMode) setAnnotationMode(false);
   setupButton.hidden = setupMode;
+  imageSetupButton.hidden = setupMode;
   setupActions.hidden = !setupMode;
   annotationModeButton.disabled = setupMode;
   undoButton.disabled = setupMode || undoButton.disabled;

@@ -81,6 +81,10 @@ function publicRoom(room) {
   };
 }
 
+app.get("/vendor/opencv.js", (req, res) => {
+  res.sendFile(path.join(__dirname, "node_modules", "@techstark", "opencv-js", "dist", "opencv.js"));
+});
+
 app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/healthz", (req, res) => {
@@ -262,6 +266,35 @@ io.on("connection", (socket) => {
     io.to(targetRoomId).emit("room-state", publicRoom(room));
   });
 
+  socket.on("apply-recognized-setup", ({ roomId, pieces: recognizedPieces }, respond = () => {}) => {
+    const targetRoomId = String(roomId || currentRoomId || "default");
+    if (targetRoomId !== currentRoomId) {
+      respond({ ok: false, message: "房间状态不匹配，请刷新后重试。" });
+      return;
+    }
+
+    const room = getRoom(targetRoomId);
+    if (room.setupMode) {
+      respond({ ok: false, message: "当前已经在布置模式中。" });
+      return;
+    }
+
+    const nextPieces = buildRecognizedPieces(recognizedPieces);
+    if (!nextPieces) {
+      respond({ ok: false, message: "识别结果无效，请换一张完整、清晰的棋盘截图。" });
+      return;
+    }
+
+    room.setupSnapshot = {
+      pieces: clonePieces(room.pieces),
+      history: cloneHistory(room.history)
+    };
+    room.pieces = nextPieces;
+    room.setupMode = true;
+    io.to(targetRoomId).emit("room-state", publicRoom(room));
+    respond({ ok: true, count: recognizedPieces.length });
+  });
+
   socket.on("clear-setup-board", (roomId) => {
     const targetRoomId = String(roomId || currentRoomId || "default");
     const room = getRoom(targetRoomId);
@@ -340,6 +373,65 @@ function boardCoordinate(value, min, max) {
   const number = Number(value);
   if (!Number.isInteger(number) || number < min || number > max) return null;
   return number;
+}
+
+function buildRecognizedPieces(values) {
+  if (!Array.isArray(values) || values.length < 2 || values.length > 32) return null;
+
+  const allowedSides = new Set(["red", "black"]);
+  const allowedKinds = new Set(["car", "horse", "elephant", "advisor", "general", "cannon", "soldier"]);
+  const occupied = new Set();
+  const sideCounts = { red: 0, black: 0 };
+  const clean = [];
+
+  for (const value of values) {
+    const side = String(value?.side || "");
+    const kind = String(value?.kind || "");
+    const x = boardCoordinate(value?.x, 0, 8);
+    const y = boardCoordinate(value?.y, 0, 9);
+    const square = `${x},${y}`;
+
+    if (!allowedSides.has(side) || !allowedKinds.has(kind) || x === null || y === null || occupied.has(square)) {
+      return null;
+    }
+
+    occupied.add(square);
+    sideCounts[side] += 1;
+    clean.push({ side, kind, x, y });
+  }
+
+  if (sideCounts.red === 0 || sideCounts.black === 0) return null;
+
+  const result = initialPieces().map((item) => ({
+    ...item,
+    captured: true,
+    capturedBy: null
+  }));
+  const pools = new Map();
+
+  result.forEach((item) => {
+    const kind = pieceKind(item.id);
+    const key = `${item.side}:${kind}`;
+    if (!pools.has(key)) pools.set(key, []);
+    pools.get(key).push(item);
+  });
+
+  clean.forEach((position) => {
+    const pool = pools.get(`${position.side}:${position.kind}`);
+    const target = pool?.find((item) => item.captured);
+    if (!target) return;
+    target.x = position.x;
+    target.y = position.y;
+    target.captured = false;
+  });
+
+  const assignedCount = result.filter((item) => !item.captured).length;
+  return assignedCount === clean.length ? result : null;
+}
+
+function pieceKind(id) {
+  return ["car", "horse", "elephant", "advisor", "general", "cannon", "soldier"]
+    .find((kind) => id.includes(`-${kind}`));
 }
 
 function sanitizeAnnotation(value, assignId) {

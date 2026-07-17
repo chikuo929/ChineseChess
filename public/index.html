@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>&#26497;&#31616;&#22312;&#32447;&#35937;&#26827;</title>
-    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/style.css?v=5" />
   </head>
   <body>
     <main class="app">
@@ -20,6 +20,7 @@
           <button id="undoButton" type="button" disabled>&#36864;&#19968;&#27493;</button>
           <button id="copyLinkButton" type="button">&#22797;&#21046;&#25151;&#38388;&#38142;&#25509;</button>
           <button id="resetButton" type="button">&#37325;&#32622;&#26827;&#30424;</button>
+          <button id="imageSetupButton" type="button">&#22270;&#29255;&#25670;&#23616;</button>
           <button id="setupButton" type="button">&#24067;&#32622;&#27531;&#23616;</button>
           <div id="setupActions" class="setup-actions" hidden>
             <button id="clearSetupButton" type="button">&#28165;&#31354;&#26827;&#30424;</button>
@@ -27,6 +28,7 @@
             <button id="finishSetupButton" type="button">&#23436;&#25104;&#24067;&#32622;</button>
             <button id="cancelSetupButton" type="button">&#21462;&#28040;&#24067;&#32622;</button>
           </div>
+          <span id="imageSetupStatus" class="image-setup-status" aria-live="polite"></span>
         </div>
       </header>
 
@@ -63,7 +65,33 @@
       </section>
     </main>
 
+    <div id="imageSetupDialog" class="image-setup-overlay" role="dialog" aria-modal="true" aria-labelledby="imageSetupTitle" aria-describedby="imageSetupHint" hidden>
+      <section class="image-setup-dialog">
+        <header class="image-setup-dialog-header">
+          <div>
+            <h2 id="imageSetupTitle">上传棋盘截图</h2>
+            <p id="imageSetupHint">支持固定平台截图；可以裁剪和缩放，但需要保留完整、清晰的棋盘和棋子。</p>
+          </div>
+          <button id="closeImageSetupButton" class="image-setup-close" type="button" aria-label="关闭图片上传">×</button>
+        </header>
+
+        <label id="imageDropZone" class="image-drop-zone" for="imageSetupInput" tabindex="0">
+          <span class="image-drop-icon" aria-hidden="true">⇧</span>
+          <strong>把棋盘截图拖到这里</strong>
+          <span>或者点击此区域选择图片</span>
+          <small>支持 PNG、JPG、WebP，最大 15 MB</small>
+        </label>
+        <input id="imageSetupInput" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+
+        <div class="image-setup-dialog-actions">
+          <button id="cancelImageSetupButton" type="button">取消</button>
+        </div>
+      </section>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
-    <script src="/app.js"></script>
+    <script async src="/vendor/opencv.js"></script>
+    <script src="/image-recognizer.js?v=4"></script>
+    <script src="/app.js?v=5"></script>
   </body>
 </html>

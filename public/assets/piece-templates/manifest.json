@@ -1,0 +1,153 @@
+{
+  "version": 1,
+  "platform": "fixed-wood-xiangqi",
+  "canonicalBoard": {
+    "width": 900,
+    "height": 1000,
+    "aspectRatio": 0.9
+  },
+  "grid": {
+    "left": 61.0,
+    "top": 54.0,
+    "stepX": 97.5,
+    "stepY": 98.2
+  },
+  "templateSize": 64,
+  "templates": [
+    {
+      "side": "red",
+      "kind": "car",
+      "file": "red-car-1.png"
+    },
+    {
+      "side": "red",
+      "kind": "car",
+      "file": "red-car-2.png"
+    },
+    {
+      "side": "red",
+      "kind": "horse",
+      "file": "red-horse-1.png"
+    },
+    {
+      "side": "red",
+      "kind": "horse",
+      "file": "red-horse-2.png"
+    },
+    {
+      "side": "red",
+      "kind": "elephant",
+      "file": "red-elephant-1.png"
+    },
+    {
+      "side": "red",
+      "kind": "elephant",
+      "file": "red-elephant-2.png"
+    },
+    {
+      "side": "red",
+      "kind": "advisor",
+      "file": "red-advisor-1.png"
+    },
+    {
+      "side": "red",
+      "kind": "advisor",
+      "file": "red-advisor-2.png"
+    },
+    {
+      "side": "red",
+      "kind": "general",
+      "file": "red-general-1.png"
+    },
+    {
+      "side": "red",
+      "kind": "cannon",
+      "file": "red-cannon-1.png"
+    },
+    {
+      "side": "red",
+      "kind": "cannon",
+      "file": "red-cannon-2.png"
+    },
+    {
+      "side": "red",
+      "kind": "soldier",
+      "file": "red-soldier-1.png"
+    },
+    {
+      "side": "red",
+      "kind": "soldier",
+      "file": "red-soldier-2.png"
+    },
+    {
+      "side": "black",
+      "kind": "car",
+      "file": "black-car-1.png"
+    },
+    {
+      "side": "black",
+      "kind": "horse",
+      "file": "black-horse-1.png"
+    },
+    {
+      "side": "black",
+      "kind": "horse",
+      "file": "black-horse-2.png"
+    },
+    {
+      "side": "black",
+      "kind": "elephant",
+      "file": "black-elephant-1.png"
+    },
+    {
+      "side": "black",
+      "kind": "elephant",
+      "file": "black-elephant-2.png"
+    },
+    {
+      "side": "black",
+      "kind": "advisor",
+      "file": "black-advisor-1.png"
+    },
+    {
+      "side": "black",
+      "kind": "advisor",
+      "file": "black-advisor-2.png"
+    },
+    {
+      "side": "black",
+      "kind": "general",
+      "file": "black-general-1.png"
+    },
+    {
+      "side": "black",
+      "kind": "cannon",
+      "file": "black-cannon-1.png"
+    },
+    {
+      "side": "black",
+      "kind": "cannon",
+      "file": "black-cannon-2.png"
+    },
+    {
+      "side": "black",
+      "kind": "soldier",
+      "file": "black-soldier-1.png"
+    },
+    {
+      "side": "black",
+      "kind": "soldier",
+      "file": "black-soldier-2.png"
+    },
+    {
+      "side": "black",
+      "kind": "soldier",
+      "file": "black-soldier-3.png"
+    },
+    {
+      "side": "black",
+      "kind": "soldier",
+      "file": "black-soldier-4.png"
+    }
+  ]
+}
